@@ -1,22 +1,14 @@
+import express from "express";
 import adminRoutes from "./admin.routes.js";
 import userRoutes from "./user.routes.js";
-import express from "express";
 
 const router = express.Router();
 
 const defaultRoutes = [
-  {
-    path: "/admin-auth",
-    route: adminRoutes,
-  },
-  {
-    path: "/user-auth",
-    route: userRoutes,
-  },
+  { path: "/admin-auth", route: adminRoutes },
+  { path: "/user-auth", route: userRoutes },
 ];
 
-defaultRoutes.forEach((route) => {
-  router.use(route.path, route.route);
-});
+defaultRoutes.forEach(({ path, route }) => router.use(path, route));
 
 export default router;

@@ -4,18 +4,28 @@ import process from "process";
 
 dotenv.config();
 
-const connectDB = async () => {
+export default async function connectDB() {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) throw new Error("MONGODB_URI is missing in environment variables");
+
+  mongoose.set("strictQuery", true);
+
   try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+    const conn = await mongoose.connect(uri);
+
+    console.log(`MongoDB Connected: ${conn.connection.host}/${conn.connection.name}`);
+
+    mongoose.connection.on("disconnected", () => {
+      console.error("MongoDB disconnected");
     });
 
-    console.log(`MongoDB Connected: ${conn.connection.host}`);
-  } catch (error) {
-    console.error(`Error: ${error.message}`);
-    process.exit(1);
-  }
-};
+    mongoose.connection.on("error", (err) => {
+      console.error("MongoDB connection error:", err);
+    });
 
-export default connectDB;
+    return conn;
+  } catch (err) {
+    console.error("MongoDB connection failed:", err.message);
+    throw err; // let the caller decide to exit
+  }
+}

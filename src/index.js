@@ -1,9 +1,7 @@
 import express from "express";
-import bodyParser from "body-parser";
 import cors from "cors";
 import dotenv from "dotenv";
 import morgan from "morgan";
-import process from "process";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import compression from "compression";
@@ -14,138 +12,111 @@ import routes from "./routes/index.js";
 import connectDB from "./config/database.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import mongoose from "mongoose";
+import process from "process";
 
 dotenv.config();
 
 const app = express();
 
-// ----------------------
-// 🔒 1. Security Middlewares
-// ----------------------
-
-// Helmet — secure HTTP headers
+// Security
 app.use(helmet());
-
-// Mongo sanitize — prevent NoSQL injection
 app.use(mongoSanitize());
-
-// XSS clean — prevent cross-site scripting
 app.use(xss());
-
-// HPP — prevent HTTP parameter pollution
 app.use(hpp());
-
-// Disable “X-Powered-By” header
 app.disable("x-powered-by");
-
-// Trust proxy (for Nginx, Render, Vercel, etc.)
 app.set("trust proxy", 1);
 
-// ----------------------
-// ⚡ 2. Performance
-// ----------------------
-
-// Compression — smaller, faster responses
+// Performance
 app.use(compression());
 
-// ----------------------
-// 🚦 3. Logging
-// ----------------------
+// Logging
 const logFormat = process.env.NODE_ENV === "development" ? "dev" : "combined";
 app.use(morgan(logFormat));
 
-// ----------------------
-// 🌐 4. CORS Configuration
-// ----------------------
+// CORS
 const whitelist = [
   "http://localhost:8080",
   "http://localhost:3000",
   "http://localhost:5173",
   process.env.CLIENT_URL,
-];
+].filter(Boolean);
 
 const corsOptions = {
-  origin: function (origin, callback) {
-    if (!origin || whitelist.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
-    }
+  origin(origin, callback) {
+    if (!origin) return callback(null, true); // allow server-to-server/curl
+    if (whitelist.includes(origin)) return callback(null, true);
+    return callback(new Error("Not allowed by CORS"));
   },
   credentials: true,
 };
 
 app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
-// ----------------------
-// 📊 5. Rate Limiting
-// ----------------------
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per window
-  message: "Too many requests from this IP, please try again later.",
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use(limiter);
+// Rate limiting (global)
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    message: "Too many requests from this IP, please try again later.",
+    standardHeaders: true,
+    legacyHeaders: false,
+  }),
+);
 
-// ----------------------
-// 🧩 6. Body Parser
-// ----------------------
-app.use(bodyParser.json({ limit: "30mb", extended: true }));
-app.use(bodyParser.urlencoded({ limit: "30mb", extended: true }));
+// Body parsing (Express built-in)
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-// ----------------------
-// 🚀 7. Routes
-// ----------------------
-app.use("/api", routes);
-
-// Health Check Route
-app.get("/", (req, res) => {
-  res.send("✅ Server is Working Fine & Secure.");
-});
-
-// ----------------------
-// 🔐 8. HTTPS Redirect (Production)
-// ----------------------
+// HTTPS redirect (place BEFORE routes)
 app.use((req, res, next) => {
-  if (req.protocol !== "https" && process.env.NODE_ENV === "production") {
-    return res.redirect(`https://${req.headers.host}${req.url}`);
+  if (process.env.NODE_ENV === "production" && req.protocol !== "https") {
+    return res.redirect(301, `https://${req.headers.host}${req.url}`);
   }
   next();
 });
 
-// ----------------------
-// 🧱 9. Global Error Handler
-// ----------------------
+// Routes
+app.use("/api/v1", routes);
+
+// Health check
+app.get("/", (req, res) => res.send("✅ Server is Working Fine & Secure."));
+
+// Error handler (last)
 app.use(errorHandler);
 
-// ----------------------
-// 🛑 10. Graceful Shutdown
-// ----------------------
-process.on("SIGINT", async () => {
-  console.log("🛑 Gracefully shutting down...");
-  await mongoose.connection.close();
-  process.exit(0);
-});
-
-process.on("SIGTERM", async () => {
-  console.log("🛑 Termination signal received, closing DB...");
-  await mongoose.connection.close();
-  process.exit(0);
-});
-
-// ----------------------
-// 🔌 11. Start Server
-// ----------------------
+// Start server after DB connects
 const PORT = process.env.PORT || 8080;
+
+let server;
 
 connectDB()
   .then(() => {
-    app.listen(PORT, () => {
+    server = app.listen(PORT, () => {
       console.log(`🚀 Server running securely on port ${PORT}`);
     });
   })
   .catch((error) => {
     console.error(`❌ Failed to start server: ${error.message}`);
+    process.exit(1);
   });
+
+// Graceful shutdown
+async function shutdown(signal) {
+  try {
+    console.log(`🛑 ${signal} received, shutting down...`);
+
+    if (server) {
+      await new Promise((resolve) => server.close(resolve));
+    }
+
+    await mongoose.connection.close();
+    process.exit(0);
+  } catch (err) {
+    console.error("Shutdown error:", err);
+    process.exit(1);
+  }
+}
+
+process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => shutdown("SIGTERM"));

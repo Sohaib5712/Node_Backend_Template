@@ -1,18 +1,16 @@
-/**
- * Custom API Error class
- */
 class ApiError extends Error {
-  /**
-   * Create a new API Error
-   * @param {number} statusCode - HTTP status code
-   * @param {string} message - Error message
-   * @param {Object} errors - Additional error details
-   */
-  constructor(statusCode, message, errors = null) {
+  constructor(statusCode, message, errors = null, errorCode = null) {
     super(message);
+
     this.statusCode = statusCode;
     this.errors = errors;
+    this.errorCode = errorCode;
     this.success = false;
+
+    // Helpful to distinguish expected errors vs bugs
+    this.isOperational = true;
+
+    Error.captureStackTrace?.(this, this.constructor);
   }
 }
 

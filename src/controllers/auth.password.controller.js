@@ -1,4 +1,3 @@
-// controllers/auth.password.controller.js
 import * as svc from "../services/password.service.js";
 import * as validator from "../validations/auth.validation.js";
 import asyncHandler from "../utils/asyncHandler.js";
@@ -11,7 +10,6 @@ export const forgotPassword = asyncHandler(async (req, res) => {
 });
 
 export const resetPassword = asyncHandler(async (req, res) => {
-  console.log("Reset Password Request Body:", req.body);
   const data = await validator.resetPasswordSchema.validateAsync(req.body);
   const result = await svc.resetPassword(data);
   res.json(ApiResponse.success(result, "Password reset successful"));

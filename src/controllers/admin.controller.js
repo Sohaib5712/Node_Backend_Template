@@ -11,33 +11,19 @@ export const login = asyncHandler(async (req, res) => {
 });
 
 export const getMe = asyncHandler(async (req, res) => {
-  if (!req.user || !req.user.id) {
-    throw new ApiError(401, "Unauthorized");
-  }
-  console.log("User ID:", req.user.id);
-  const user = await service.getMe(req.user.id);
-  return res.json(
-    ApiResponse.success({
-      user: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-        status: user.status,
-        permissions: user.permissions,
-        lastLogin: user.lastLogin,
-        loginHistory: user.loginHistory,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-      },
-    }),
-  );
+  const adminId = req.userId || req.user?._id;
+  if (!adminId) throw new ApiError(401, "Unauthorized");
+
+  const user = await service.getMe(adminId);
+  if (!user) throw new ApiError(404, "Admin not found");
+
+  res.json(ApiResponse.success({ user }, "Admin fetched"));
 });
 
 export const createAdminUser = asyncHandler(async (req, res) => {
   const data = await validator.createSchema.validateAsync(req.body);
   const result = await service.createAdminUser(data);
-  res.status(201).json(ApiResponse.success(result, "Admin user created successfully", 201));
+  res.status(201).json(ApiResponse.success(result, "Admin user created successfully"));
 });
 
 export const getAdminUsers = asyncHandler(async (req, res) => {
@@ -58,6 +44,7 @@ export const updateAdminUser = asyncHandler(async (req, res) => {
 });
 
 export const toggleAdminStatus = asyncHandler(async (req, res) => {
+  // Ideally validate with Joi schema like toggleStatusSchema
   const { status } = req.body;
   const updated = await service.toggleAdminStatus(req.params.id, status);
   res.json(ApiResponse.success(updated, "Admin status updated"));
@@ -65,18 +52,17 @@ export const toggleAdminStatus = asyncHandler(async (req, res) => {
 
 export const getSingleAdmin = asyncHandler(async (req, res) => {
   const admin = await service.getSingleAdmin(req.params.id);
-  if (!admin) throw new ApiError(404, "Admin not found");
   res.json(ApiResponse.success(admin, "Admin fetched"));
 });
 
 export const deleteAdminUser = asyncHandler(async (req, res) => {
-  await service.deleteAdminUser(req.params.id);
-  res.json(ApiResponse.success(null, "Admin user deleted"));
+  const result = await service.deleteAdminUser(req.params.id);
+  res.json(ApiResponse.success(result, "Admin user deleted"));
 });
 
 export const changeAdminPassword = asyncHandler(async (req, res) => {
+  // Ideally validate with Joi schema
   const { currentPassword, newPassword } = req.body;
-  const adminId = req.params.id;
-  const result = await service.changeAdminPasswordService(adminId, currentPassword, newPassword);
+  const result = await service.changeAdminPasswordService(req.params.id, currentPassword, newPassword);
   res.json(ApiResponse.success(result, "Password changed successfully"));
 });
