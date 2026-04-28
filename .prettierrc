@@ -12,5 +12,13 @@
   "quoteProps": "consistent",
   "proseWrap": "preserve",
   "htmlWhitespaceSensitivity": "css",
-  "embeddedLanguageFormatting": "auto"
+  "embeddedLanguageFormatting": "auto",
+  "overrides": [
+    {
+      "files": ["*.json", "*.md"],
+      "options": {
+        "printWidth": 80
+      }
+    }
+  ]
 }

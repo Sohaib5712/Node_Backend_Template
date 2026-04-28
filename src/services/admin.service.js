@@ -1,8 +1,8 @@
 import AdminUser from "../models/admin.model.js";
-import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import { paginate } from "../utils/pagination.js";
-import { send2FACode } from "./opt.service.js";
+import { hashPassword, verifyPassword } from "../utils/password.js";
+import { send2FACode } from "./otp.service.js";
 import { createSecretToken, generateToken } from "../utils/jwt.js";
 import ApiError from "../utils/ApiError.js";
 
@@ -26,12 +26,10 @@ export async function login({ email, password }) {
   const admin = await AdminUser.findOne({ email: email.toLowerCase().trim() }).select("+password");
   if (!admin) throw new ApiError(401, "Invalid credentials");
 
-  const ok = await bcrypt.compare(password, admin.password);
+  const ok = await verifyPassword(password, admin.password);
   if (!ok) throw new ApiError(401, "Invalid credentials");
 
-  if (admin.status && admin.status !== "active") {
-    throw new ApiError(403, "Account is not active");
-  }
+  if (admin.status && admin.status !== "active") throw new ApiError(403, "Account is not active");
 
   if (admin.twoFactorEnabled) {
     await send2FACode(admin._id, "admin");
@@ -45,7 +43,6 @@ export async function login({ email, password }) {
   admin.loginHistory = admin.loginHistory || [];
   admin.loginHistory.push(admin.lastLogin);
   if (admin.loginHistory.length > 20) admin.loginHistory = admin.loginHistory.slice(-20);
-
   await admin.save();
 
   const safeAdmin = await AdminUser.findById(admin._id).select("-password").lean();
@@ -64,7 +61,7 @@ export async function createAdminUser(data) {
     if (usernameExists) throw new ApiError(409, "Username already in use");
   }
 
-  const hashed = await bcrypt.hash(data.password, 10);
+  const hashed = await hashPassword(data.password);
   const created = await AdminUser.create({ ...data, email, username, password: hashed });
 
   return AdminUser.findById(created._id).select("-password").lean();
@@ -81,7 +78,6 @@ export async function getAdminUsers({ page = 1, limit = 10, search = "", status 
   if (status) query.status = status;
 
   const total = await AdminUser.countDocuments(query);
-
   const results = await AdminUser.find(query)
     .select("-password")
     .skip((pageNum - 1) * limitNum)
@@ -100,16 +96,12 @@ export async function getAdminUserById(id) {
 export async function updateAdminUser(id, data) {
   if (!mongoose.Types.ObjectId.isValid(id)) throw new ApiError(400, "Invalid admin ID");
 
-  // IMPORTANT: allowlist fields to prevent privilege escalation
   const allowed = ["username", "email", "status", "permissions", "meta", "role", "twoFactorEnabled"];
   const update = pick(data, allowed);
 
-  if (data.password) update.password = await bcrypt.hash(data.password, 10);
+  if (data.password) update.password = await hashPassword(data.password);
 
-  const updated = await AdminUser.findByIdAndUpdate(id, update, {
-    new: true,
-    runValidators: true,
-  })
+  const updated = await AdminUser.findByIdAndUpdate(id, update, { new: true, runValidators: true })
     .select("-password")
     .lean();
 
@@ -133,19 +125,15 @@ export async function toggleAdminStatus(id, status) {
 
 export async function getSingleAdmin(id) {
   if (!mongoose.Types.ObjectId.isValid(id)) throw new ApiError(400, "Invalid admin ID");
-
   const admin = await AdminUser.findById(id).select("-password").lean();
   if (!admin) throw new ApiError(404, "Admin user not found");
-
   return admin;
 }
 
 export async function deleteAdminUser(id) {
   if (!mongoose.Types.ObjectId.isValid(id)) throw new ApiError(400, "Invalid admin ID");
-
   const deleted = await AdminUser.findByIdAndDelete(id).lean();
   if (!deleted) throw new ApiError(404, "Admin user not found");
-
   return { deleted: true };
 }
 
@@ -155,10 +143,10 @@ export async function changeAdminPasswordService(adminId, currentPassword, newPa
   const admin = await AdminUser.findById(adminId).select("+password");
   if (!admin) throw new ApiError(404, "Admin not found");
 
-  const ok = await bcrypt.compare(currentPassword, admin.password);
+  const ok = await verifyPassword(currentPassword, admin.password);
   if (!ok) throw new ApiError(400, "Current password is incorrect");
 
-  admin.password = await bcrypt.hash(newPassword, 10);
+  admin.password = await hashPassword(newPassword);
   await admin.save();
 
   return { message: "Password updated successfully" };

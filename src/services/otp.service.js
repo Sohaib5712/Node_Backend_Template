@@ -1,11 +1,12 @@
 import crypto from "crypto";
 import userModel from "../models/user.model.js";
 import AdminUser from "../models/admin.model.js";
-import { send2FAEmail } from "../utils/email.js";
-import { generateSixDigitCode } from "../utils/jwt.js";
+import { send2FAEmail } from "../emails/index.js";
 import ApiError from "../utils/ApiError.js";
 
 const getModelByRole = (role) => (role === "admin" ? AdminUser : userModel);
+
+const generateCode = () => crypto.randomInt(0, 1_000_000).toString().padStart(6, "0");
 
 const hashCode = (code) => crypto.createHash("sha256").update(String(code)).digest("hex");
 
@@ -25,7 +26,6 @@ export const toggleTwoFA = async (userId, enable, role = "user") => {
   const user = await getUserById(userId, role);
   user.twoFactorEnabled = !!enable;
 
-  // clear any existing code when disabling
   if (!enable) {
     user.twoFactorCode = undefined;
     user.twoFactorCodeExpiresAt = undefined;
@@ -41,10 +41,10 @@ export const send2FACode = async (userId, role = "user") => {
 
   if (!user.twoFactorEnabled) throw new ApiError(400, "2FA is not enabled for this user");
 
-  const code = generateSixDigitCode(); // e.g. "123456"
+  const code = generateCode();
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-  user.twoFactorCode = hashCode(code); // STORE HASHED
+  user.twoFactorCode = hashCode(code);
   user.twoFactorCodeExpiresAt = expiresAt;
   user.twoFactorCodeUsed = false;
 

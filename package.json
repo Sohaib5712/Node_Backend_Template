@@ -1,31 +1,29 @@
 {
-  "name": "aqarlee-real-estate",
+  "name": "node-backend-template",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "src/index.js",
   "type": "module",
   "scripts": {
+    "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
     "lint": "eslint . --fix",
     "format": "prettier --write .",
     "prepare": "husky"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
+  "pnpm": {
+    "onlyBuiltDependencies": ["argon2"]
+  },
   "dependencies": {
-    "bcrypt": "^5.1.1",
-    "bcryptjs": "^3.0.2",
-    "body-parser": "^1.20.1",
+    "argon2": "^0.31.2",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.0.3",
     "express": "^4.18.2",
     "express-mongo-sanitize": "^2.2.0",
     "express-rate-limit": "^8.2.1",
-    "express-validator": "^6.14.2",
-    "formik-yup": "^0.0.5",
-    "googleapis": "^109.0.1",
     "helmet": "^8.1.0",
     "hpp": "^0.2.3",
     "joi": "^17.9.2",
@@ -33,7 +31,6 @@
     "mongoose": "^6.7.2",
     "morgan": "^1.10.0",
     "nodemailer": "^6.8.0",
-    "nodemon": "^2.0.20",
     "xss-clean": "^0.1.4"
   },
   "devDependencies": {
@@ -43,6 +40,7 @@
     "eslint-plugin-prettier": "^5.2.3",
     "globals": "^15.15.0",
     "husky": "^9.1.7",
+    "nodemon": "^3.0.0",
     "prettier": "^3.5.1"
   }
 }

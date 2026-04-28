@@ -44,8 +44,7 @@ export const updateAdminUser = asyncHandler(async (req, res) => {
 });
 
 export const toggleAdminStatus = asyncHandler(async (req, res) => {
-  // Ideally validate with Joi schema like toggleStatusSchema
-  const { status } = req.body;
+  const { status } = await validator.toggleStatusSchema.validateAsync(req.body);
   const updated = await service.toggleAdminStatus(req.params.id, status);
   res.json(ApiResponse.success(updated, "Admin status updated"));
 });
@@ -61,8 +60,7 @@ export const deleteAdminUser = asyncHandler(async (req, res) => {
 });
 
 export const changeAdminPassword = asyncHandler(async (req, res) => {
-  // Ideally validate with Joi schema
-  const { currentPassword, newPassword } = req.body;
-  const result = await service.changeAdminPasswordService(req.params.id, currentPassword, newPassword);
+  const data = await validator.changePasswordSchema.validateAsync(req.body);
+  const result = await service.changeAdminPasswordService(req.params.id, data.currentPassword, data.newPassword);
   res.json(ApiResponse.success(result, "Password changed successfully"));
 });

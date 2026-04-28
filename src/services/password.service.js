@@ -1,28 +1,26 @@
-import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import User from "../models/user.model.js";
 import Admin from "../models/admin.model.js";
 import ApiError from "../utils/ApiError.js";
-import { sendPasswordResetCodeEmail } from "../utils/email.js";
+import { hashPassword } from "../utils/password.js";
+import { sendPasswordResetCodeEmail } from "../emails/index.js";
 
-function generateCode() {
-  const n = crypto.randomInt(0, 1_000_000);
-  return n.toString().padStart(6, "0");
-}
+const getModel = (role) => (role === "admin" ? Admin : User);
 
-function hashCode(code) {
-  return crypto.createHash("sha256").update(String(code)).digest("hex");
-}
+const generateCode = () => crypto.randomInt(0, 1_000_000).toString().padStart(6, "0");
 
-export async function requestPasswordReset({ email }) {
+const hashCode = (code) => crypto.createHash("sha256").update(String(code)).digest("hex");
+
+export async function requestPasswordReset({ email, role = "user" }) {
+  const Model = getModel(role);
   const normalizedEmail = email.toLowerCase().trim();
-  const user = await Admin.findOne({ email: normalizedEmail });
+  const user = await Model.findOne({ email: normalizedEmail });
 
-  // prevent enumeration
+  // prevent enumeration — always return the same response
   if (!user) return { sent: true };
 
   const code = generateCode();
-
-  user.resetPasswordToken = hashCode(code); // HASHED
+  user.resetPasswordToken = hashCode(code);
   user.resetPasswordExpires = new Date(Date.now() + 10 * 60 * 1000);
   await user.save();
 
@@ -30,9 +28,10 @@ export async function requestPasswordReset({ email }) {
   return { sent: true };
 }
 
-export async function resetPassword({ email, code, newPassword }) {
+export async function resetPassword({ email, code, newPassword, role = "user" }) {
+  const Model = getModel(role);
   const normalizedEmail = email.toLowerCase().trim();
-  const user = await Admin.findOne({ email: normalizedEmail }).select("+password");
+  const user = await Model.findOne({ email: normalizedEmail }).select("+password");
   if (!user) throw new ApiError(400, "Invalid reset request");
 
   if (!user.resetPasswordToken || !user.resetPasswordExpires) {
@@ -43,17 +42,13 @@ export async function resetPassword({ email, code, newPassword }) {
     throw new ApiError(400, "Reset code expired");
   }
 
-  const provided = hashCode(code);
-  if (user.resetPasswordToken !== provided) {
+  if (user.resetPasswordToken !== hashCode(code)) {
     throw new ApiError(400, "Invalid reset code");
   }
 
-  user.password = await bcrypt.hash(newPassword, 10);
-
-  // clear fields (single use)
+  user.password = await hashPassword(newPassword);
   user.resetPasswordToken = undefined;
   user.resetPasswordExpires = undefined;
-
   await user.save();
 
   return { message: "Password has been reset" };

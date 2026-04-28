@@ -43,7 +43,7 @@ const whitelist = [
 
 const corsOptions = {
   origin(origin, callback) {
-    if (!origin) return callback(null, true); // allow server-to-server/curl
+    if (!origin) return callback(null, true); // allow server-to-server / curl
     if (whitelist.includes(origin)) return callback(null, true);
     return callback(new Error("Not allowed by CORS"));
   },
@@ -53,7 +53,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
-// Rate limiting (global)
+// Global rate limit
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -64,11 +64,11 @@ app.use(
   }),
 );
 
-// Body parsing (Express built-in)
+// Body parsing
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-// HTTPS redirect (place BEFORE routes)
+// HTTPS redirect in production
 app.use((req, res, next) => {
   if (process.env.NODE_ENV === "production" && req.protocol !== "https") {
     return res.redirect(301, `https://${req.headers.host}${req.url}`);
@@ -76,16 +76,22 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes
+// Health check
+app.get("/", (_req, res) =>
+  res.json({ success: true, message: "Server is running", env: process.env.NODE_ENV, timestamp: new Date() }),
+);
+
+// API routes
 app.use("/api/v1", routes);
 
-// Health check
-app.get("/", (req, res) => res.send("✅ Server is Working Fine & Secure."));
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ success: false, message: `Route ${req.method} ${req.originalUrl} not found` });
+});
 
-// Error handler (last)
+// Global error handler (must be last)
 app.use(errorHandler);
 
-// Start server after DB connects
 const PORT = process.env.PORT || 8080;
 
 let server;
@@ -93,23 +99,19 @@ let server;
 connectDB()
   .then(() => {
     server = app.listen(PORT, () => {
-      console.log(`🚀 Server running securely on port ${PORT}`);
+      console.log(`Server running on port ${PORT} [${process.env.NODE_ENV}]`);
     });
   })
   .catch((error) => {
-    console.error(`❌ Failed to start server: ${error.message}`);
+    console.error(`Failed to start server: ${error.message}`);
     process.exit(1);
   });
 
 // Graceful shutdown
 async function shutdown(signal) {
   try {
-    console.log(`🛑 ${signal} received, shutting down...`);
-
-    if (server) {
-      await new Promise((resolve) => server.close(resolve));
-    }
-
+    console.log(`${signal} received, shutting down...`);
+    if (server) await new Promise((resolve) => server.close(resolve));
     await mongoose.connection.close();
     process.exit(0);
   } catch (err) {
